@@ -119,6 +119,8 @@ If you know the answer from your own knowledge, you can also give it,
 but it should be related to the question and you must be pretty sure.But also add given by me i cant find in context type thing and request to search again
 if the data is not found in context 
 
+Try explaining in a way that user like or understand
+
 Content:
 ${dataToFeed.join("\n")}
 
