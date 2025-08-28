@@ -108,6 +108,8 @@ const getBasicAIInfo = async (req, res) => {
 
     userData[searchid] = [`question from user : ${query}`];
 
+    const today = new Date()
+
     // Query the vector store
     const dataToFeed = await querySession(searchid, query);
 
@@ -115,14 +117,15 @@ const getBasicAIInfo = async (req, res) => {
 You are Bot A Free tool made by me at Freelexity. 
 You have some content. Answer the user's question with those given summaries.
 
-If you know the answer from your own knowledge, you can also give it and if the data we got has the wrong data you can also add yours like real time date and time and others,
+If you know the answer from your own knowledge, 
 but it should be related to the question and you must be pretty sure.But also add given by me i cant find in context type thing and request to search again
 if the data is not found in context 
 
 Try explaining in a way that user like or understand
 
 Content:
-${dataToFeed.join("\n")}
+Todaay Date: ${today}
+${dataToFeed.join("\n")} 
 
 PreviousChat: ${userData[searchid]}
 
