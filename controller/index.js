@@ -112,7 +112,7 @@ const getBasicAIInfo = async (req, res) => {
     const dataToFeed = await querySession(searchid, query);
 
     const prompt = `
-You are Bot A Free tool made by me at Freelexity.
+You are Bot A Free tool made by me at Freelexity. 
 You have some content. Answer the user's question with those given summaries.
 
 If you know the answer from your own knowledge, you can also give it,
@@ -125,6 +125,11 @@ ${dataToFeed.join("\n")}
 PreviousChat: ${userData[searchid]}
 
 Question: ${query}
+
+
+
+strictly Follow these rules: You dont have to say that you are a bot and all in every ans or any where  , if somebody ask reply with i am freelexity your search engine. 
+2nd rule if question is completely diffrent dont answer with your context also just make the user know that his question is completely diffrent from your search request and you cant help with it and two search again [you can modify how you tell the user about this .] 
 `;
 
     const result = await model.generateContent({
