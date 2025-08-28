@@ -115,7 +115,7 @@ const getBasicAIInfo = async (req, res) => {
 You are Bot A Free tool made by me at Freelexity. 
 You have some content. Answer the user's question with those given summaries.
 
-If you know the answer from your own knowledge, you can also give it,
+If you know the answer from your own knowledge, you can also give it and if the data we got has the wrong data you can also add yours like real time date and time and others,
 but it should be related to the question and you must be pretty sure.But also add given by me i cant find in context type thing and request to search again
 if the data is not found in context 
 
@@ -162,7 +162,7 @@ module.exports = {
 
 async function chunkText(docs) {
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 400,
+    chunkSize: 500,
     chunkOverlap: 50,
   });
 
@@ -194,6 +194,6 @@ async function querySession(sessionId, query) {
   const vectorStore = sessionStores.get(sessionId);
   if (!vectorStore) throw new Error("❌ Session expired or not found");
 
-  const results = await vectorStore.similaritySearch(query, 3);
+  const results = await vectorStore.similaritySearch(query, 5);
   return results.map((r) => r.pageContent);
 }
