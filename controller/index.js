@@ -19,8 +19,8 @@ const embeddings = new GoogleGenerativeAIEmbeddings({
 const userData = {};
 const sessionStores = new Map(); // Local in-memory DB
 
-const userImages = {}
 
+const UserImages = {}
 
 
 // ============ MAIN SEARCH ==============
@@ -48,44 +48,61 @@ const getSearch = async (req, res) => {
 
     userData[searchid] = [`question from user : ${query}`];
 
-    const urls = data.map(itm => {
-      return itm.url
-    })
-
-    const ineed = await getSummary(urls, searchid)
-
-    let summary = ineed.map(itm => {
-      return itm.text
-    }) 
-
-     if(summary.length==0){
-        summary = data.map(itm=>itm.summary)
-      }
-
-    const chunks = await chunkText(summary);
 
 
+    // const basicData = data.map(itm => itm.snippet)
 
-    //console.log(urls)
+    const scrapedData = await getSummary([data[0].url, data[0].url], searchid) || data[0].summary
+    
+    const imagesLinks = UserImages[searchid].map((itm)=>{
+      return itm.images.map(itm=>itm.src)
+    }) || []
+
+   
+
+    let datas = [...scrapedData,...imagesLinks[0]  ]
 
 
+    const chunks = await chunkText(datas)
 
     await saveToSession(searchid, chunks);
+
+    const basicData = await querySession(searchid, query)
+
+    setTimeout(async () => {
+      const urls = data.map(itm => itm.url)
+      const summary = await getSummary(urls, searchid)
+      const chunks = await chunkText(summary);
+      await saveToSession(searchid, chunks);
+
+    }, 300)
+
+
+
+
+
 
     // Auto-clean after 25 mins
     setTimeout(() => {
       if (userData[searchid]) {
         delete userData[searchid];
-        delete userImages[searchid]
+        delete UserImages[searchid]
       }
     }, 25 * 60 * 1000);
 
-    const result = await generateOutput(searchid, query)
+    // const dataToFeed = await querySession(searchid, query);
+
+    const result = await generateOutput(basicData, searchid, query)
+
+    const images = UserImages[searchid]
+
+    delete UserImages[searchid]
+
 
     return res.status(200).json({
       data: response.data,
       aiResponse: result.response.text(),
-      images: userImages[searchid]
+      Files:images
     });
   } catch (error) {
     console.error("Error in getSearch:", error.message);
@@ -114,7 +131,7 @@ const getBasicAIInfo = async (req, res) => {
         query: query,
         freshness: "noLimit",
         summary: true,
-        count: 5,
+        count: 6,
       };
 
       const headers = {
@@ -125,41 +142,31 @@ const getBasicAIInfo = async (req, res) => {
 
       let data = response.data.data?.webPages?.value;
 
-      const urls = data.map(itm => {
-        return itm.url
-      })
+      const urls = data.map(itm => itm.url)
 
-      const ineed = await getSummary(urls, searchid)
+      let summary = await getSummary(urls, searchid)
 
-      let summary = ineed.map(itm => {
-        return itm.text
-      })
 
-      if(summary.length==0){
-        summary = data.map(itm=>itm.summary)
-      }
-
-      const chunks = await chunkText( summary);
+      const chunks = await chunkText(summary);
       await saveToSession(searchid, chunks);
 
       setTimeout(() => {
         if (userData[searchid]) {
           delete userData[searchid];
-          delete userImages[searchid]
+          delete UserImages[searchid]
         }
       }, 25 * 60 * 1000);
     }
 
-    userData[searchid].push(`Question from user ${query}`)
+    userData[searchid] = [`question from user : ${query}`];
 
 
+    const dataToFeed = await querySession(searchid, query);
 
 
+    const result = await generateOutput(dataToFeed, searchid, query)
 
-    // Query the vector store
-
-
-    const result = await generateOutput(searchid, query)
+    delete UserImages[searchid]
 
 
     return res.status(200).json({
@@ -175,6 +182,9 @@ const getBasicAIInfo = async (req, res) => {
 
 
 
+
+
+
 module.exports = {
   getSearch,
   getBasicAIInfo,
@@ -184,11 +194,13 @@ module.exports = {
 
 async function chunkText(docs) {
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 500,
-    chunkOverlap: 50,
+    chunkSize: 800,
+    chunkOverlap: 120,
   });
 
   let allChunks = [];
+
+
   for (const doc of docs) {
     const chunks = await splitter.splitText(doc);
     allChunks = allChunks.concat(chunks);
@@ -216,13 +228,18 @@ async function querySession(sessionId, query) {
   const vectorStore = sessionStores.get(sessionId);
   if (!vectorStore) throw new Error("❌ Session expired or not found");
 
-  const results = await vectorStore.similaritySearch(query, 5);
+  const result1 = await vectorStore.similaritySearch(query , 4);
+
+   const result2 = await vectorStore.similaritySearch(`${query} images img // https//` , 3);
+
+   const results = [...result1,...result2]
+
   return results.map((r) => r.pageContent);
 }
 
 
-const generateOutput = async (searchid, query) => {
-  const dataToFeed = await querySession(searchid, query);
+const generateOutput = async (dataToFeed, searchid, query) => {
+
 
   const today = new Date()
 
@@ -234,14 +251,29 @@ If you know the answer from your own knowledge,
 but it should be related to the question and you must be pretty sure.But also add given by me i cant find in context type thing and request to search again
 if the data is not found in context 
 
-Try explaining in a way that user like or understand
+Try explaining in a way that user like or understand in long
+
+question was asked on ${today}
 
 Content:
 ${dataToFeed.join("\n")}
 
-PreviousChat: ${userData[searchid]}
+PreviousChat: ${userData[searchid]} also use this to know user query
 
-Question: ${query}
+Question: ${query} Question Ends'
+
+At the end of your response, if you find any files with extensions .jpg, .jpeg, .png, or .webm or any  please dont send same image twice  create a JSON object containing an array of these URLs. Surround the JSON with special markers <image> at the beginning and <image> at the end. Only include valid, accessible image URLs; if there are none, skip this part entirely and act as if it doesn’t exist.
+
+Example format:
+
+<image>
+{
+  "images": [
+    "https://example.com/image1.jpg",
+    "https://example.com/video.webm"
+  ]
+}
+<image>
 
 strictly Follow these rules: You dont have to say that you are a bot and all in every ans or any where  , if somebody ask reply with i am freelexity your search engine. 
 2nd rule if question is completely diffrent dont answer with your context also just make the user know that his question is completely diffrent from your search request and you cant help with it and two search again [you can modify how you tell the user about this .] 
@@ -261,7 +293,12 @@ strictly Follow these rules: You dont have to say that you are a bot and all in 
 
 const scrapedata = async (url, sid) => {
   try {
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
     const $ = cheerio.load(data);
 
     // Extract all text (cleaned, no extra whitespace)
@@ -270,24 +307,44 @@ const scrapedata = async (url, sid) => {
       .replace(/\s+/g, " ")
       .trim();
 
-    // Extract all images (with alt + src)
-
+    const images = [];
     $("img").each((i, el) => {
-      const src = $(el).attr("src");
+      const src = $(el).attr("src") || $(el).attr("data-src");
       const alt = $(el).attr("alt") || "";
-      const data = { src, alt, imageFrom: url }
-      if (src && (src.startsWith("//") || src.startsWith("https"))) {
-        if (userImages[sid]) {
-          userImages[sid].push(data)
-        } else {
-          userImages[sid] = [{ data }]
-        }
+      if (src && /\.(jpg|jpeg|png)$/i.test(src)) {
+        images.push({ src, alt });
       }
     });
 
-    return { url, text };
+    // Extract all videos
+    const videos = [];
+    $("video").each((i, el) => {
+      const src = $(el).attr("src");
+      if (src && src.startsWith('http')) {
+        videos.push({ src });
+      }
+
+      // Also check for <source> inside <video>
+      $(el)
+        .find("source")
+        .each((j, s) => {
+          const source = $(s).attr("src");
+          if (source && /\.(mp4|webm|ogg)$/i.test(source)) {
+            videos.push({ src: source });
+          }
+        });
+    });
+
+    if(UserImages[sid]){
+      UserImages[sid].push({images:images , videos:videos})
+    }else{
+      UserImages[sid] = [{images:images , videos:videos}]
+    }
+
+    return text
   } catch (err) {
 
+    console.error(`Failed scraping ${url}:`, err.message);
     return null
   }
 };
